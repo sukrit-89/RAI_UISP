@@ -85,49 +85,49 @@ export default function VerifyInvoicePage() {
     }, [invoiceId, getInvoice]);
 
     const handleVerify = async () => {
-        if (!invoice || !address) {
-            toast.error('Please connect your wallet to verify');
+        if (!invoice) {
+            toast.error('Invoice not found');
             return;
         }
 
         setIsVerifying(true);
 
         try {
-            // Use contract verification if buyer address matches
-            if (invoice.buyerAddress && invoice.buyerAddress === address) {
-                const success = await verifyInvoice(invoiceId, address);
-                if (success) {
-                    setIsVerified(true);
-                    toast.success('Invoice verified on blockchain!');
-                } else {
-                    toast.error('Verification failed. Please try again.');
-                }
-            } else {
-                // Demo mode or buyer address mismatch - use localStorage
-                const STORAGE_KEY = 'receivai_invoices';
-                for (let i = 0; i < localStorage.length; i++) {
-                    const key = localStorage.key(i);
-                    if (key?.startsWith(STORAGE_KEY)) {
-                        try {
-                            const invoices = JSON.parse(localStorage.getItem(key) || '[]');
-                            const updatedInvoices = invoices.map((inv: Invoice) => {
-                                if (inv.id === invoiceId) {
-                                    return { ...inv, status: 'verified', verifiedAt: new Date().toISOString() };
-                                }
-                                return inv;
-                            });
+            // Update localStorage directly for demo simplicity
+            const STORAGE_KEY = 'receivai_invoices';
+            let updated = false;
+
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key?.startsWith(STORAGE_KEY)) {
+                    try {
+                        const invoices = JSON.parse(localStorage.getItem(key) || '[]');
+                        const updatedInvoices = invoices.map((inv: Invoice) => {
+                            if (inv.id === invoiceId && inv.status === 'pending') {
+                                updated = true;
+                                return { ...inv, status: 'verified', verifiedAt: new Date().toISOString() };
+                            }
+                            return inv;
+                        });
+                        if (updated) {
                             localStorage.setItem(key, JSON.stringify(updatedInvoices));
-                        } catch (e) {
-                            console.error('Error updating invoice:', e);
+                            break;
                         }
+                    } catch (e) {
+                        console.error('Error updating invoice:', e);
                     }
                 }
+            }
+
+            if (updated || invoice.status !== 'pending') {
                 setIsVerified(true);
-                toast.success('Invoice verified successfully!');
+                toast.success('✅ Invoice verified successfully!');
+            } else {
+                toast.error('Could not verify invoice');
             }
         } catch (error) {
             console.error('Verification error:', error);
-            toast.error('Failed to verify invoice. Please try again.');
+            toast.error('Failed to verify invoice');
         } finally {
             setIsVerifying(false);
         }

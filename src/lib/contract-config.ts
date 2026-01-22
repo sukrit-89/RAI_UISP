@@ -13,9 +13,9 @@ export const SOROBAN_CONFIG = {
     // Token for payments (USDC on testnet or native XLM)
     PAYMENT_TOKEN: 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC', // Testnet USDC
 
-    // Demo mode - use localStorage instead of real contract
-    // Contract is deployed! Set to false to use real contract calls
-    DEMO_MODE: false, // Keep true for hackathon demo (simpler UX)
+    // Demo mode - use localStorage for smooth demo experience
+    // Contract is deployed but requires invoices to be minted on-chain first
+    DEMO_MODE: true, // Set to false only when invoices are minted via contract
 };
 
 // Invoice status enum matching contract

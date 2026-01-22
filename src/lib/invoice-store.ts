@@ -55,65 +55,29 @@ export function useInvoiceStore(
 
         setIsLoading(true);
 
-        // Try to load from contract first
+        // Try to load from contract first (but will merge with localStorage)
+        let contractInvoices: Invoice[] = [];
         if (!SOROBAN_CONFIG.DEMO_MODE) {
             try {
                 const client = getContractClient();
                 if (client) {
-                    const contractInvoices = await client.getInvoicesBySeller(walletAddress);
-                    
-                    // Always use contract data if available, even if empty
-                    setInvoices(contractInvoices);
-
-                    const contractListings = await client.getAllListings();
-                    
-                    // Fetch invoice details for each listing
-                    const formattedListings: MarketplaceListing[] = [];
-                    for (const listing of contractListings) {
-                        const invoiceId = `INV-${listing.invoiceId.toString().padStart(6, '0')}`;
-                        let invoice = contractInvoices.find(i => i.id === invoiceId);
-                        
-                        // If invoice not in seller's list, fetch it separately
-                        if (!invoice) {
-                            const fetchedInvoice = await client.getInvoice(listing.invoiceId);
-                            if (fetchedInvoice) {
-                                invoice = fetchedInvoice;
-                            }
-                        }
-
-                        if (invoice) {
-                            const discount = ((invoice.amount - listing.price) / invoice.amount) * 100;
-                            const daysUntilDue = Math.ceil((new Date(invoice.dueDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-                            const yieldPercent = daysUntilDue > 0 ? (discount / daysUntilDue) * 365 : 0;
-
-                            formattedListings.push({
-                                invoiceId,
-                                seller: listing.seller,
-                                price: listing.price,
-                                discount,
-                                yield: yieldPercent,
-                                listedAt: new Date(listing.listedAt * 1000),
-                                invoice,
-                            });
-                        }
-                    }
-                    
-                    setListings(formattedListings);
-                    setIsLoading(false);
-                    return;
+                    contractInvoices = await client.getInvoicesBySeller(walletAddress);
+                    console.log('[loadData] Contract invoices:', contractInvoices.length);
                 }
             } catch (error) {
-                console.log('Contract load failed, falling back to localStorage', error);
+                console.log('Contract load failed, using localStorage only', error);
             }
         }
 
-        // Fall back to localStorage (demo mode)
+        // Load from localStorage and merge with contract data
         const savedInvoices = localStorage.getItem(`${STORAGE_KEY}_${walletAddress}`);
         const savedListings = localStorage.getItem(MARKETPLACE_KEY);
 
+        let allInvoices: Invoice[] = [];
+
         if (savedInvoices) {
             const parsed = JSON.parse(savedInvoices);
-            setInvoices(parsed.map((inv: Invoice) => ({
+            allInvoices = parsed.map((inv: Invoice) => ({
                 ...inv,
                 dueDate: new Date(inv.dueDate),
                 createdAt: new Date(inv.createdAt),
@@ -121,10 +85,19 @@ export function useInvoiceStore(
                 listedAt: inv.listedAt ? new Date(inv.listedAt) : undefined,
                 soldAt: inv.soldAt ? new Date(inv.soldAt) : undefined,
                 settledAt: inv.settledAt ? new Date(inv.settledAt) : undefined,
-            })));
-        } else {
-            setInvoices([]);
+            }));
         }
+
+        // Merge contract invoices (add any not already in localStorage)
+        const localIds = new Set(allInvoices.map(i => i.id));
+        for (const ci of contractInvoices) {
+            if (!localIds.has(ci.id)) {
+                allInvoices.push(ci);
+            }
+        }
+
+        console.log('[loadData] Total invoices after merge:', allInvoices.length);
+        setInvoices(allInvoices);
 
         if (savedListings) {
             const parsed = JSON.parse(savedListings);
@@ -184,14 +157,23 @@ export function useInvoiceStore(
         dueDate: Date,
         buyerAddress?: string
     ): Promise<Invoice | null> => {
-        if (!walletAddress) return null;
+        console.log('[createInvoice] Called with:', { buyerName, amount, dueDate, buyerAddress, walletAddress });
 
-        // In demo mode or if no buyer address, use localStorage
-        if (SOROBAN_CONFIG.DEMO_MODE || !buyerAddress) {
+        if (!walletAddress) {
+            console.error('[createInvoice] No wallet address - user not connected');
+            return null;
+        }
+
+        // Always use localStorage if no valid buyer Stellar address provided
+        // Contract requires valid Stellar addresses for both parties
+        const useLocalStorage = !buyerAddress || !buyerAddress.startsWith('G') || buyerAddress.length !== 56;
+        console.log('[createInvoice] Using localStorage:', useLocalStorage);
+
+        if (useLocalStorage) {
             const newInvoice: Invoice = {
                 id: generateInvoiceId(),
                 buyerName,
-                buyerAddress: buyerAddress || 'GBUYER' + Math.random().toString(36).substring(2, 10).toUpperCase(),
+                buyerAddress: buyerAddress || 'GBUYER' + Math.random().toString(36).substring(2, 10).toUpperCase() + 'XXXXXX',
                 sellerAddress: walletAddress,
                 amount,
                 dueDate,
@@ -199,9 +181,12 @@ export function useInvoiceStore(
                 createdAt: new Date(),
             };
 
+            console.log('[createInvoice] Created invoice:', newInvoice);
+
             const newInvoices = [...invoices, newInvoice];
             setInvoices(newInvoices);
             saveInvoices(newInvoices);
+            console.log('[createInvoice] Saved to invoices, total count:', newInvoices.length);
             return newInvoice;
         }
 
@@ -218,7 +203,7 @@ export function useInvoiceStore(
 
             // Reload from contract
             await loadData();
-            
+
             // Return the newly created invoice (last one)
             const updatedInvoices = await client.getInvoicesBySeller(walletAddress);
             return updatedInvoices[updatedInvoices.length - 1] || null;

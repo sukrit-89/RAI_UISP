@@ -12,8 +12,9 @@ interface MarketplaceTabProps {
 }
 
 export function MarketplaceTab({ listings, onBuy, currentWallet }: MarketplaceTabProps) {
-    const availableListings = listings.filter(l => l.seller !== currentWallet);
-    const myListings = listings.filter(l => l.seller === currentWallet);
+    // For demo, show all listings (including own) so you can test buying
+    const availableListings = listings; // Allow buying own invoices for demo
+    const myListings: MarketplaceListing[] = []; // Hide "your listings" section in demo
 
     if (listings.length === 0) {
         return (

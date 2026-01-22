@@ -2,7 +2,7 @@
 
 import type { Invoice } from '@/lib/types';
 import { formatCurrency, getDaysUntilDue } from '@/lib/types';
-import { Clock, User, Copy, ArrowRight, Eye, TrendingUp } from 'lucide-react';
+import { Clock, User, Copy, ArrowRight, Eye, TrendingUp, CheckCircle2 } from 'lucide-react';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 
@@ -94,11 +94,10 @@ export function InvoiceCard({ invoice, onSell, onViewListing, onTrackSettlement 
                 return (
                     <button
                         onClick={() => onTrackSettlement?.(invoice)}
-                        className={`w-full flex items-center justify-center gap-2 ${
-                            canSettle
+                        className={`w-full flex items-center justify-center gap-2 ${canSettle
                                 ? 'btn-primary'
                                 : 'btn-secondary text-purple-600 border-purple-200 hover:bg-purple-50'
-                        }`}
+                            }`}
                     >
                         {canSettle ? (
                             <>
