@@ -54,14 +54,14 @@ export function AIAgentPanel({ recommendations, onApprove, onDismiss }: AIAgentP
     }
 
     return (
-        <div className="card p-6">
-            <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center animate-pulse">
-                    <Bot size={20} className="text-white" />
+        <div className="card p-6 hover-lift">
+            <div className="flex items-center gap-3 mb-6">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-400 via-orange-500 to-amber-600 flex items-center justify-center shadow-lg animate-pulse">
+                    <Bot size={24} className="text-white" />
                 </div>
                 <div>
-                    <h3 className="font-bold text-gray-900">AI Finance Agent</h3>
-                    <p className="text-sm text-gray-500">{recommendations.length} suggestion{recommendations.length > 1 ? 's' : ''}</p>
+                    <h3 className="font-bold text-gray-900 text-lg">AI Finance Agent</h3>
+                    <p className="text-sm text-gray-500 font-medium">{recommendations.length} suggestion{recommendations.length > 1 ? 's' : ''}</p>
                 </div>
             </div>
 
@@ -118,10 +118,12 @@ export function AIAgentPanel({ recommendations, onApprove, onDismiss }: AIAgentP
                 </AnimatePresence>
             </div>
 
-            <div className="mt-4 pt-4 border-t border-gray-100">
-                <p className="text-xs text-gray-500 text-center">
-                    🔒 AI never auto-executes. You approve every action.
-                </p>
+            <div className="mt-6 pt-4 border-t border-gray-200">
+                <div className="bg-teal-50 rounded-lg p-3 border border-teal-100">
+                    <p className="text-xs text-teal-700 text-center font-medium">
+                        🔒 AI never auto-executes. You approve every action.
+                    </p>
+                </div>
             </div>
         </div>
     );

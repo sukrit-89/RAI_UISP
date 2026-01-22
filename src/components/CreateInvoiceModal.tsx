@@ -1,8 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import { validateInvoiceData, handleError } from '@/lib/error-handler';
 import { X, Calendar, User, DollarSign } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import toast from 'react-hot-toast';
 
 interface CreateInvoiceModalProps {
     isOpen: boolean;
@@ -17,10 +19,20 @@ export function CreateInvoiceModal({ isOpen, onClose, onSubmit }: CreateInvoiceM
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!buyerName || !amount) return;
-
+        
         const dueDate = new Date();
         dueDate.setDate(dueDate.getDate() + parseInt(dueDays));
+
+        const validation = validateInvoiceData({
+            buyerName,
+            amount: parseFloat(amount),
+            dueDate,
+        });
+
+        if (!validation.valid && validation.error) {
+            toast.error(validation.error.userMessage);
+            return;
+        }
 
         onSubmit({
             buyerName,

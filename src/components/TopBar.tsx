@@ -2,7 +2,7 @@
 
 import { useWallet } from '@/lib/wallet-context';
 import { formatCurrency, formatAddress } from '@/lib/types';
-import { Wallet, LogOut, Bell, ChevronDown } from 'lucide-react';
+import { Wallet, LogOut, Bell, ChevronDown, RefreshCw } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 interface TopBarProps {
@@ -10,7 +10,7 @@ interface TopBarProps {
 }
 
 export function TopBar({ pendingCount = 0 }: TopBarProps) {
-    const { isConnected, isConnecting, address, balance, connect, disconnect } = useWallet();
+    const { isConnected, isConnecting, address, balance, xlmBalance, isLoadingBalance, connect, disconnect, refreshBalance } = useWallet();
     const [animateBalance, setAnimateBalance] = useState(false);
     const [prevBalance, setPrevBalance] = useState(balance);
 
@@ -25,12 +25,14 @@ export function TopBar({ pendingCount = 0 }: TopBarProps) {
     }, [balance, prevBalance]);
 
     return (
-        <header className="bg-white border-b border-gray-200 px-6 py-4">
+        <header className="bg-white/80 backdrop-blur-lg border-b border-gray-200/50 px-8 py-5 shadow-sm sticky top-0 z-40">
             <div className="flex items-center justify-between">
                 {/* Left side - Page title area */}
                 <div>
-                    <h2 className="text-2xl font-bold text-gray-900">Dashboard</h2>
-                    <p className="text-sm text-gray-500">Manage your invoices and cash flow</p>
+                    <h2 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+                        Dashboard
+                    </h2>
+                    <p className="text-sm text-gray-500 mt-1">Manage your invoices and cash flow</p>
                 </div>
 
                 {/* Right side - Wallet and notifications */}
@@ -48,27 +50,46 @@ export function TopBar({ pendingCount = 0 }: TopBarProps) {
                     {isConnected && address ? (
                         <div className="flex items-center gap-4">
                             {/* Balance display */}
-                            <div className="text-right">
-                                <div className="text-xs text-gray-500 uppercase tracking-wide">Balance</div>
-                                <div
-                                    className={`text-xl font-bold text-gray-900 ${animateBalance ? 'balance-animate text-green-600' : ''}`}
+                            <div className="text-right px-4 py-3 bg-gradient-to-br from-teal-50 to-emerald-50 rounded-xl border border-teal-100 relative group">
+                                <button
+                                    onClick={refreshBalance}
+                                    disabled={isLoadingBalance}
+                                    className="absolute top-2 right-2 p-1 rounded-lg hover:bg-teal-100 transition-colors opacity-0 group-hover:opacity-100"
+                                    title="Refresh balance"
                                 >
-                                    {formatCurrency(balance)}
-                                </div>
+                                    <RefreshCw size={14} className={`text-teal-600 ${isLoadingBalance ? 'animate-spin' : ''}`} />
+                                </button>
+                                <div className="text-xs text-teal-600 uppercase tracking-wide font-semibold mb-1">Balance</div>
+                                {isLoadingBalance ? (
+                                    <div className="text-lg text-teal-600 font-semibold">Loading...</div>
+                                ) : (
+                                    <>
+                                        <div
+                                            className={`text-2xl font-bold bg-gradient-to-r from-teal-600 to-emerald-600 bg-clip-text text-transparent transition-all duration-300 ${
+                                                animateBalance ? 'balance-animate scale-110' : ''
+                                            }`}
+                                        >
+                                            {formatCurrency(balance)}
+                                        </div>
+                                        <div className="text-xs text-teal-500 mt-1 font-medium">
+                                            {xlmBalance.toFixed(2)} XLM
+                                        </div>
+                                    </>
+                                )}
                             </div>
 
                             {/* Wallet info */}
-                            <div className="flex items-center gap-3 px-4 py-2 bg-gray-50 rounded-xl border border-gray-200">
-                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center">
-                                    <Wallet size={16} className="text-white" />
+                            <div className="flex items-center gap-3 px-5 py-3 bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl border border-gray-200 hover:border-teal-300 transition-all duration-200 hover:shadow-md cursor-pointer group">
+                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-400 via-teal-500 to-teal-600 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                                    <Wallet size={18} className="text-white" />
                                 </div>
                                 <div>
-                                    <div className="text-sm font-medium text-gray-900">
+                                    <div className="text-sm font-semibold text-gray-900">
                                         {formatAddress(address)}
                                     </div>
-                                    <div className="text-xs text-gray-500">Testnet</div>
+                                    <div className="text-xs text-gray-500 font-medium">Testnet</div>
                                 </div>
-                                <ChevronDown size={16} className="text-gray-400" />
+                                <ChevronDown size={16} className="text-gray-400 group-hover:text-teal-600 transition-colors" />
                             </div>
 
                             {/* Disconnect button */}

@@ -1,9 +1,9 @@
 // Soroban Contract Configuration
-// Deploy to testnet and update this contract ID
+// Deployed to Stellar Testnet!
 
 export const SOROBAN_CONFIG = {
-    // Contract ID - update after deployment
-    UISP_CONTRACT_ID: 'PLACEHOLDER_CONTRACT_ID_DEPLOY_FIRST',
+    // Contract ID - Deployed!
+    UISP_CONTRACT_ID: 'CCHFONTRNCJ5RBA73GPPXEKKAUGV2Q5PMP2LZMNLDI45UHI3I5UTOHYE',
 
     // Network configuration
     NETWORK_PASSPHRASE: 'Test SDF Network ; September 2015',
@@ -14,8 +14,8 @@ export const SOROBAN_CONFIG = {
     PAYMENT_TOKEN: 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC', // Testnet USDC
 
     // Demo mode - use localStorage instead of real contract
-    // Set to false when contract is deployed
-    DEMO_MODE: true,
+    // Contract is deployed! Set to false to use real contract calls
+    DEMO_MODE: false, // Keep true for hackathon demo (simpler UX)
 };
 
 // Invoice status enum matching contract

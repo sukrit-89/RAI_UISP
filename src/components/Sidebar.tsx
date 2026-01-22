@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, ShoppingCart, Bot, FileText, Settings, HelpCircle } from 'lucide-react';
+import { Home, ShoppingCart, Bot, FileText, Settings, HelpCircle, ExternalLink } from 'lucide-react';
 
 const navItems = [
     { name: 'Dashboard', href: '/', icon: Home },
@@ -11,9 +11,9 @@ const navItems = [
 ];
 
 const bottomItems = [
-    { name: 'Documents', href: '#', icon: FileText },
-    { name: 'Settings', href: '#', icon: Settings },
-    { name: 'Help', href: '#', icon: HelpCircle },
+    { name: 'Documents', href: 'https://github.com/sukrit-89/RAI_UISP', icon: FileText, external: true },
+    { name: 'Settings', href: '#', icon: Settings, external: false },
+    { name: 'Help', href: 'https://github.com/sukrit-89/RAI_UISP#readme', icon: HelpCircle, external: true },
 ];
 
 export function Sidebar() {
@@ -23,13 +23,13 @@ export function Sidebar() {
         <aside className="sidebar flex flex-col">
             {/* Logo */}
             <div className="p-6 border-b border-white/10">
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center">
-                        <span className="text-white font-bold text-lg">R</span>
+                <div className="flex items-center gap-3 group">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-teal-400 via-teal-500 to-teal-600 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
+                        <span className="text-white font-bold text-xl">R</span>
                     </div>
                     <div>
-                        <h1 className="text-white font-bold text-xl">ReceivAI</h1>
-                        <p className="text-gray-400 text-xs">Invoice Finance</p>
+                        <h1 className="text-white font-bold text-xl tracking-tight">ReceivAI</h1>
+                        <p className="text-gray-400 text-xs font-medium">Invoice Finance</p>
                     </div>
                 </div>
             </div>
@@ -63,10 +63,15 @@ export function Sidebar() {
                     <a
                         key={item.name}
                         href={item.href}
-                        className="sidebar-nav-item opacity-60 hover:opacity-100"
+                        target={item.external ? '_blank' : undefined}
+                        rel={item.external ? 'noopener noreferrer' : undefined}
+                        className="sidebar-nav-item opacity-60 hover:opacity-100 flex items-center justify-between"
                     >
-                        <item.icon size={18} />
-                        <span className="text-sm">{item.name}</span>
+                        <div className="flex items-center gap-3">
+                            <item.icon size={18} />
+                            <span className="text-sm">{item.name}</span>
+                        </div>
+                        {item.external && <ExternalLink size={14} className="opacity-50" />}
                     </a>
                 ))}
             </div>

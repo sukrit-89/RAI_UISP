@@ -18,43 +18,7 @@ function getContractClient() {
     return contractClient;
 }
 
-// Demo invoices for showcase (when in demo mode or no contract)
-function createDemoInvoices(sellerAddress: string): Invoice[] {
-    const now = new Date();
-    return [
-        {
-            id: 'INV-DEMO001',
-            buyerName: 'Mumbai Hotel',
-            buyerAddress: 'GBUYER1' + 'X'.repeat(40) + 'DEMO',
-            sellerAddress,
-            amount: 100000,
-            dueDate: new Date(now.getTime() + 45 * 24 * 60 * 60 * 1000),
-            status: 'pending',
-            createdAt: new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000),
-        },
-        {
-            id: 'INV-DEMO002',
-            buyerName: 'Kolkata Crafts',
-            buyerAddress: 'GBUYER2' + 'X'.repeat(40) + 'DEMO',
-            sellerAddress,
-            amount: 75000,
-            dueDate: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
-            status: 'verified',
-            createdAt: new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000),
-            verifiedAt: new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000),
-        },
-        {
-            id: 'INV-DEMO003',
-            buyerName: 'Delhi Electronics',
-            buyerAddress: 'GBUYER3' + 'X'.repeat(40) + 'DEMO',
-            sellerAddress,
-            amount: 50000,
-            dueDate: new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000),
-            status: 'pending',
-            createdAt: new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000),
-        },
-    ];
-}
+// No demo data - all invoices come from contract or localStorage
 
 export interface InvoiceStoreHook {
     invoices: Invoice[];
@@ -64,6 +28,9 @@ export interface InvoiceStoreHook {
     updateStatus: (invoiceId: string, newStatus: InvoiceStatus) => void;
     listInvoice: (invoiceId: string, price: number) => Promise<boolean>;
     buyInvoice: (invoiceId: string, buyerAddress: string) => Promise<MarketplaceListing | null>;
+    settleInvoice: (invoiceId: string, payerAddress: string) => Promise<boolean>;
+    verifyInvoice: (invoiceId: string, buyerAddress: string) => Promise<boolean>;
+    refreshData: () => Promise<void>;
     getInvoice: (invoiceId: string) => Invoice | undefined;
     getByStatus: (status: InvoiceStatus) => Invoice[];
     signAndSubmit: (txXdr: string) => Promise<boolean>;
@@ -77,85 +44,110 @@ export function useInvoiceStore(
     const [listings, setListings] = useState<MarketplaceListing[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
-    // Load from localStorage or contract
-    useEffect(() => {
-        const loadData = async () => {
-            if (!walletAddress) {
-                setInvoices([]);
-                setIsLoading(false);
-                return;
-            }
+    // Load data function (reusable)
+    const loadData = useCallback(async () => {
+        if (!walletAddress) {
+            setInvoices([]);
+            setListings([]);
+            setIsLoading(false);
+            return;
+        }
 
-            // Try to load from contract first
-            if (!SOROBAN_CONFIG.DEMO_MODE) {
-                try {
-                    const client = getContractClient();
-                    if (client) {
-                        const contractInvoices = await client.getInvoicesBySeller(walletAddress);
-                        if (contractInvoices.length > 0) {
-                            setInvoices(contractInvoices);
+        setIsLoading(true);
 
-                            const contractListings = await client.getAllListings();
-                            const formattedListings = contractListings.map(l => ({
-                                invoiceId: `INV-${l.invoiceId.toString().padStart(6, '0')}`,
-                                seller: l.seller,
-                                price: l.price,
-                                discount: 3, // Calculate from invoice
-                                yield: 24, // Calculate from invoice
-                                listedAt: new Date(l.listedAt * 1000),
-                                invoice: contractInvoices.find(i => i.id === `INV-${l.invoiceId.toString().padStart(6, '0')}`)!,
-                            })).filter(l => l.invoice);
-                            setListings(formattedListings);
+        // Try to load from contract first
+        if (!SOROBAN_CONFIG.DEMO_MODE) {
+            try {
+                const client = getContractClient();
+                if (client) {
+                    const contractInvoices = await client.getInvoicesBySeller(walletAddress);
+                    
+                    // Always use contract data if available, even if empty
+                    setInvoices(contractInvoices);
 
-                            setIsLoading(false);
-                            return;
+                    const contractListings = await client.getAllListings();
+                    
+                    // Fetch invoice details for each listing
+                    const formattedListings: MarketplaceListing[] = [];
+                    for (const listing of contractListings) {
+                        const invoiceId = `INV-${listing.invoiceId.toString().padStart(6, '0')}`;
+                        let invoice = contractInvoices.find(i => i.id === invoiceId);
+                        
+                        // If invoice not in seller's list, fetch it separately
+                        if (!invoice) {
+                            const fetchedInvoice = await client.getInvoice(listing.invoiceId);
+                            if (fetchedInvoice) {
+                                invoice = fetchedInvoice;
+                            }
+                        }
+
+                        if (invoice) {
+                            const discount = ((invoice.amount - listing.price) / invoice.amount) * 100;
+                            const daysUntilDue = Math.ceil((new Date(invoice.dueDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                            const yieldPercent = daysUntilDue > 0 ? (discount / daysUntilDue) * 365 : 0;
+
+                            formattedListings.push({
+                                invoiceId,
+                                seller: listing.seller,
+                                price: listing.price,
+                                discount,
+                                yield: yieldPercent,
+                                listedAt: new Date(listing.listedAt * 1000),
+                                invoice,
+                            });
                         }
                     }
-                } catch (error) {
-                    console.log('Contract load failed, falling back to localStorage', error);
+                    
+                    setListings(formattedListings);
+                    setIsLoading(false);
+                    return;
                 }
+            } catch (error) {
+                console.log('Contract load failed, falling back to localStorage', error);
             }
+        }
 
-            // Fall back to localStorage (demo mode)
-            const savedInvoices = localStorage.getItem(`${STORAGE_KEY}_${walletAddress}`);
-            const savedListings = localStorage.getItem(MARKETPLACE_KEY);
+        // Fall back to localStorage (demo mode)
+        const savedInvoices = localStorage.getItem(`${STORAGE_KEY}_${walletAddress}`);
+        const savedListings = localStorage.getItem(MARKETPLACE_KEY);
 
-            if (savedInvoices) {
-                const parsed = JSON.parse(savedInvoices);
-                setInvoices(parsed.map((inv: Invoice) => ({
-                    ...inv,
-                    dueDate: new Date(inv.dueDate),
-                    createdAt: new Date(inv.createdAt),
-                    verifiedAt: inv.verifiedAt ? new Date(inv.verifiedAt) : undefined,
-                    listedAt: inv.listedAt ? new Date(inv.listedAt) : undefined,
-                    soldAt: inv.soldAt ? new Date(inv.soldAt) : undefined,
-                    settledAt: inv.settledAt ? new Date(inv.settledAt) : undefined,
-                })));
-            } else {
-                // Initialize with demo invoices
-                const demoInvoices = createDemoInvoices(walletAddress);
-                setInvoices(demoInvoices);
-                localStorage.setItem(`${STORAGE_KEY}_${walletAddress}`, JSON.stringify(demoInvoices));
-            }
+        if (savedInvoices) {
+            const parsed = JSON.parse(savedInvoices);
+            setInvoices(parsed.map((inv: Invoice) => ({
+                ...inv,
+                dueDate: new Date(inv.dueDate),
+                createdAt: new Date(inv.createdAt),
+                verifiedAt: inv.verifiedAt ? new Date(inv.verifiedAt) : undefined,
+                listedAt: inv.listedAt ? new Date(inv.listedAt) : undefined,
+                soldAt: inv.soldAt ? new Date(inv.soldAt) : undefined,
+                settledAt: inv.settledAt ? new Date(inv.settledAt) : undefined,
+            })));
+        } else {
+            setInvoices([]);
+        }
 
-            if (savedListings) {
-                const parsed = JSON.parse(savedListings);
-                setListings(parsed.map((listing: MarketplaceListing) => ({
-                    ...listing,
-                    listedAt: new Date(listing.listedAt),
-                    invoice: {
-                        ...listing.invoice,
-                        dueDate: new Date(listing.invoice.dueDate),
-                        createdAt: new Date(listing.invoice.createdAt),
-                    },
-                })));
-            }
+        if (savedListings) {
+            const parsed = JSON.parse(savedListings);
+            setListings(parsed.map((listing: MarketplaceListing) => ({
+                ...listing,
+                listedAt: new Date(listing.listedAt),
+                invoice: {
+                    ...listing.invoice,
+                    dueDate: new Date(listing.invoice.dueDate),
+                    createdAt: new Date(listing.invoice.createdAt),
+                },
+            })));
+        } else {
+            setListings([]);
+        }
 
-            setIsLoading(false);
-        };
-
-        loadData();
+        setIsLoading(false);
     }, [walletAddress]);
+
+    // Load from localStorage or contract
+    useEffect(() => {
+        loadData();
+    }, [loadData]);
 
     // Save to localStorage
     const saveInvoices = useCallback((newInvoices: Invoice[]) => {
@@ -225,10 +217,11 @@ export function useInvoiceStore(
             if (!success) throw new Error('Transaction failed');
 
             // Reload from contract
+            await loadData();
+            
+            // Return the newly created invoice (last one)
             const updatedInvoices = await client.getInvoicesBySeller(walletAddress);
-            setInvoices(updatedInvoices);
-
-            return updatedInvoices[updatedInvoices.length - 1];
+            return updatedInvoices[updatedInvoices.length - 1] || null;
         } catch (error) {
             console.error('Contract mint failed:', error);
 
@@ -328,10 +321,7 @@ export function useInvoiceStore(
 
             if (success) {
                 updateStatus(invoiceId, 'listed');
-
-                // Update listings from contract
-                const updatedListings = await client.getAllListings();
-                // Convert to MarketplaceListing format...
+                await loadData();
             }
 
             return success;
@@ -383,12 +373,7 @@ export function useInvoiceStore(
 
             if (success) {
                 updateStatus(invoiceId, 'sold');
-
-                // Remove from listings
-                const newListings = listings.filter(l => l.invoiceId !== invoiceId);
-                setListings(newListings);
-                saveListings(newListings);
-
+                await loadData();
                 return listing;
             }
 
@@ -404,6 +389,65 @@ export function useInvoiceStore(
         return invoices.find(inv => inv.id === invoiceId);
     }, [invoices]);
 
+    // Verify invoice (buyer verifies)
+    const verifyInvoice = useCallback(async (invoiceId: string, buyerAddress: string): Promise<boolean> => {
+        if (SOROBAN_CONFIG.DEMO_MODE) {
+            updateStatus(invoiceId, 'verified');
+            return true;
+        }
+
+        try {
+            const client = getContractClient();
+            if (!client) throw new Error('No contract client');
+
+            const numericId = parseInt(invoiceId.replace(/\D/g, ''));
+            const { txXdr } = await client.verify(numericId, buyerAddress);
+            const success = await signAndSubmit(txXdr);
+
+            if (success) {
+                updateStatus(invoiceId, 'verified');
+                await loadData();
+            }
+
+            return success;
+        } catch (error) {
+            console.error('Contract verify failed:', error);
+            return false;
+        }
+    }, [updateStatus, signAndSubmit, loadData]);
+
+    // Settle invoice (payer pays the current holder)
+    const settleInvoice = useCallback(async (invoiceId: string, payerAddress: string): Promise<boolean> => {
+        if (SOROBAN_CONFIG.DEMO_MODE) {
+            updateStatus(invoiceId, 'settled');
+            return true;
+        }
+
+        try {
+            const client = getContractClient();
+            if (!client) throw new Error('No contract client');
+
+            const numericId = parseInt(invoiceId.replace(/\D/g, ''));
+            const { txXdr } = await client.settle(numericId, payerAddress);
+            const success = await signAndSubmit(txXdr);
+
+            if (success) {
+                updateStatus(invoiceId, 'settled');
+                await loadData();
+            }
+
+            return success;
+        } catch (error) {
+            console.error('Contract settle failed:', error);
+            return false;
+        }
+    }, [updateStatus, signAndSubmit, loadData]);
+
+    // Refresh data from contract
+    const refreshData = useCallback(async () => {
+        await loadData();
+    }, [loadData]);
+
     // Get invoices by status
     const getByStatus = useCallback((status: InvoiceStatus) => {
         return invoices.filter(inv => inv.status === status);
@@ -417,6 +461,9 @@ export function useInvoiceStore(
         updateStatus,
         listInvoice,
         buyInvoice,
+        verifyInvoice,
+        settleInvoice,
+        refreshData,
         getInvoice,
         getByStatus,
         signAndSubmit,

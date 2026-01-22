@@ -6,6 +6,8 @@ import { getSuggestedPrice } from '@/lib/ai-rules';
 import { X, TrendingUp, Clock, User, Sparkles, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect } from 'react';
+import { validateListingPrice, handleError } from '@/lib/error-handler';
+import toast from 'react-hot-toast';
 
 interface SellInvoiceModalProps {
     isOpen: boolean;
@@ -32,6 +34,13 @@ export function SellInvoiceModal({ isOpen, invoice, onClose, onList }: SellInvoi
 
     const handleList = () => {
         if (!invoice) return;
+        
+        const validation = validateListingPrice(price, invoice.amount);
+        if (!validation.valid && validation.error) {
+            toast.error(validation.error.userMessage);
+            return;
+        }
+        
         onList(invoice.id, price);
         onClose();
     };

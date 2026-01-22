@@ -3,85 +3,134 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { useWallet } from '@/lib/wallet-context';
+import { useInvoiceStore } from '@/lib/invoice-store';
 import type { Invoice } from '@/lib/types';
 import { formatCurrency, getDaysUntilDue } from '@/lib/types';
 import { CheckCircle, Clock, User, FileText, ArrowLeft, Wallet } from 'lucide-react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
-
-const STORAGE_KEY = 'receivai_invoices';
+import { createContractClient } from '@/lib/contract-client';
+import { SOROBAN_CONFIG } from '@/lib/contract-config';
 
 export default function VerifyInvoicePage() {
     const params = useParams();
     const router = useRouter();
     const invoiceId = params.invoice as string;
 
-    const { isConnected, connect, address } = useWallet();
+    const { isConnected, connect, address, signTx } = useWallet();
+    const { verifyInvoice, getInvoice } = useInvoiceStore(address, signTx);
     const [invoice, setInvoice] = useState<Invoice | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isVerifying, setIsVerifying] = useState(false);
     const [isVerified, setIsVerified] = useState(false);
 
-    // Find the invoice in localStorage (we check all wallets since buyer might be different)
+    // Find the invoice from contract or localStorage
     useEffect(() => {
-        const findInvoice = () => {
-            // Search through all stored invoices
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key?.startsWith(STORAGE_KEY)) {
-                    try {
-                        const invoices = JSON.parse(localStorage.getItem(key) || '[]');
-                        const found = invoices.find((inv: Invoice) => inv.id === invoiceId);
-                        if (found) {
-                            setInvoice({
-                                ...found,
-                                dueDate: new Date(found.dueDate),
-                                createdAt: new Date(found.createdAt),
-                            });
-                            setIsVerified(found.status === 'verified' || found.status === 'listed' || found.status === 'sold');
-                            break;
+        const findInvoice = async () => {
+            try {
+                // Try to get from store first
+                const foundInvoice = getInvoice(invoiceId);
+                if (foundInvoice) {
+                    setInvoice(foundInvoice);
+                    setIsVerified(foundInvoice.status !== 'pending');
+                    setIsLoading(false);
+                    return;
+                }
+
+                // Try contract if not in demo mode
+                if (!SOROBAN_CONFIG.DEMO_MODE) {
+                    const client = createContractClient();
+                    const numericId = parseInt(invoiceId.replace(/\D/g, ''));
+                    if (!isNaN(numericId)) {
+                        const contractInvoice = await client.getInvoice(numericId);
+                        if (contractInvoice) {
+                            setInvoice(contractInvoice);
+                            setIsVerified(contractInvoice.status !== 'pending');
+                            setIsLoading(false);
+                            return;
                         }
-                    } catch (e) {
-                        console.error('Error parsing invoices:', e);
                     }
                 }
+
+                // Fallback to localStorage
+                const STORAGE_KEY = 'receivai_invoices';
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key?.startsWith(STORAGE_KEY)) {
+                        try {
+                            const invoices = JSON.parse(localStorage.getItem(key) || '[]');
+                            const found = invoices.find((inv: Invoice) => inv.id === invoiceId);
+                            if (found) {
+                                setInvoice({
+                                    ...found,
+                                    dueDate: new Date(found.dueDate),
+                                    createdAt: new Date(found.createdAt),
+                                });
+                                setIsVerified(found.status === 'verified' || found.status === 'listed' || found.status === 'sold');
+                                setIsLoading(false);
+                                return;
+                            }
+                        } catch (e) {
+                            console.error('Error parsing invoices:', e);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error finding invoice:', error);
             }
             setIsLoading(false);
         };
 
         findInvoice();
-    }, [invoiceId]);
+    }, [invoiceId, getInvoice]);
 
     const handleVerify = async () => {
-        if (!invoice) return;
+        if (!invoice || !address) {
+            toast.error('Please connect your wallet to verify');
+            return;
+        }
 
         setIsVerifying(true);
 
-        // Simulate blockchain transaction
-        await new Promise(resolve => setTimeout(resolve, 1500));
-
-        // Update the invoice in localStorage
-        for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key?.startsWith(STORAGE_KEY)) {
-                try {
-                    const invoices = JSON.parse(localStorage.getItem(key) || '[]');
-                    const updatedInvoices = invoices.map((inv: Invoice) => {
-                        if (inv.id === invoiceId) {
-                            return { ...inv, status: 'verified', verifiedAt: new Date().toISOString() };
-                        }
-                        return inv;
-                    });
-                    localStorage.setItem(key, JSON.stringify(updatedInvoices));
-                } catch (e) {
-                    console.error('Error updating invoice:', e);
+        try {
+            // Use contract verification if buyer address matches
+            if (invoice.buyerAddress && invoice.buyerAddress === address) {
+                const success = await verifyInvoice(invoiceId, address);
+                if (success) {
+                    setIsVerified(true);
+                    toast.success('Invoice verified on blockchain!');
+                } else {
+                    toast.error('Verification failed. Please try again.');
                 }
+            } else {
+                // Demo mode or buyer address mismatch - use localStorage
+                const STORAGE_KEY = 'receivai_invoices';
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key?.startsWith(STORAGE_KEY)) {
+                        try {
+                            const invoices = JSON.parse(localStorage.getItem(key) || '[]');
+                            const updatedInvoices = invoices.map((inv: Invoice) => {
+                                if (inv.id === invoiceId) {
+                                    return { ...inv, status: 'verified', verifiedAt: new Date().toISOString() };
+                                }
+                                return inv;
+                            });
+                            localStorage.setItem(key, JSON.stringify(updatedInvoices));
+                        } catch (e) {
+                            console.error('Error updating invoice:', e);
+                        }
+                    }
+                }
+                setIsVerified(true);
+                toast.success('Invoice verified successfully!');
             }
+        } catch (error) {
+            console.error('Verification error:', error);
+            toast.error('Failed to verify invoice. Please try again.');
+        } finally {
+            setIsVerifying(false);
         }
-
-        setIsVerified(true);
-        setIsVerifying(false);
-        toast.success('Invoice verified successfully!');
     };
 
     if (isLoading) {

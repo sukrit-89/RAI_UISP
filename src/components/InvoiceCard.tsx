@@ -89,13 +89,28 @@ export function InvoiceCard({ invoice, onSell, onViewListing, onTrackSettlement 
                     </button>
                 );
             case 'sold':
+                const daysUntilDue = getDaysUntilDue(invoice.dueDate);
+                const canSettle = daysUntilDue <= 0 && invoice.buyerAddress;
                 return (
                     <button
                         onClick={() => onTrackSettlement?.(invoice)}
-                        className="btn-secondary w-full flex items-center justify-center gap-2 text-purple-600 border-purple-200 hover:bg-purple-50"
+                        className={`w-full flex items-center justify-center gap-2 ${
+                            canSettle
+                                ? 'btn-primary'
+                                : 'btn-secondary text-purple-600 border-purple-200 hover:bg-purple-50'
+                        }`}
                     >
-                        <Clock size={16} />
-                        Track Settlement
+                        {canSettle ? (
+                            <>
+                                <CheckCircle2 size={16} />
+                                Settle Now
+                            </>
+                        ) : (
+                            <>
+                                <Clock size={16} />
+                                {daysUntilDue > 0 ? `Due in ${daysUntilDue} days` : 'Track Settlement'}
+                            </>
+                        )}
                     </button>
                 );
             case 'settled':
@@ -110,38 +125,41 @@ export function InvoiceCard({ invoice, onSell, onViewListing, onTrackSettlement 
     };
 
     return (
-        <div className={`card p-6 ${invoice.status === 'sold' ? 'success-glow' : ''}`}>
+        <div className={`card p-6 hover-lift ${invoice.status === 'sold' ? 'success-glow' : ''}`}>
             {/* Header */}
-            <div className="flex items-start justify-between mb-4">
+            <div className="flex items-start justify-between mb-5">
                 <div>
-                    <span className="text-xs text-gray-500 font-medium">{invoice.id}</span>
-                    <div className="flex items-center gap-2 mt-1">
-                        <User size={14} className="text-gray-400" />
-                        <span className="font-semibold text-gray-900">{invoice.buyerName}</span>
+                    <span className="text-xs text-gray-500 font-semibold uppercase tracking-wide">{invoice.id}</span>
+                    <div className="flex items-center gap-2 mt-2">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-teal-100 to-teal-200 flex items-center justify-center">
+                            <User size={14} className="text-teal-600" />
+                        </div>
+                        <span className="font-bold text-gray-900">{invoice.buyerName}</span>
                     </div>
                 </div>
                 <span className={`status-badge ${status.className}`}>
-                    <span className={`w-2 h-2 rounded-full ${status.dot}`}></span>
+                    <span className={`w-2.5 h-2.5 rounded-full ${status.dot} animate-pulse`}></span>
                     {status.label}
                 </span>
             </div>
 
             {/* Amount */}
-            <div className="mb-4">
-                <div className="text-3xl font-bold text-gray-900">
+            <div className="mb-5">
+                <div className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
                     {formatCurrency(invoice.amount)}
                 </div>
                 {invoice.soldPrice && invoice.status === 'sold' && (
-                    <div className="text-sm text-green-600 mt-1">
+                    <div className="text-sm text-green-600 mt-2 font-semibold flex items-center gap-1">
+                        <span>✓</span>
                         Sold for {formatCurrency(invoice.soldPrice)}
                     </div>
                 )}
             </div>
 
             {/* Due date */}
-            <div className="flex items-center gap-2 text-sm text-gray-500 mb-6">
-                <Clock size={14} />
-                <span>
+            <div className="flex items-center gap-2 text-sm text-gray-500 mb-5 bg-gray-50 rounded-lg p-3">
+                <Clock size={16} className="text-teal-600" />
+                <span className="font-medium">
                     {daysUntilDue > 0
                         ? `Due in ${daysUntilDue} days`
                         : daysUntilDue === 0
@@ -153,8 +171,8 @@ export function InvoiceCard({ invoice, onSell, onViewListing, onTrackSettlement 
 
             {/* Settlement note for sold invoices */}
             {invoice.status === 'sold' && (
-                <div className="bg-purple-50 border border-purple-100 rounded-lg p-3 mb-4 text-sm text-purple-700">
-                    Settlement occurs automatically on due date to the current invoice holder.
+                <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-4 mb-4 text-sm text-purple-700 font-medium">
+                    💰 Settlement occurs automatically on due date to the current invoice holder.
                 </div>
             )}
 
