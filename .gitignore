@@ -39,3 +39,29 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Rust / Soroban contract artifacts
+contracts/**/target/
+contracts/**/*.wasm
+contracts/**/Cargo.lock
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Logs
+logs/
+*.log
+
+# Local env files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
